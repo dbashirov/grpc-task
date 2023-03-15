@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package api;
+
+option go_package = "./api";
+
+message Task {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    bool done = 4;
+}
+
+message CreateTaskRequest {
+    Task task = 1;
+}
+
+message CreateTaskResponse {
+    string id = 1;
+}
+
+message ReadTaskRequest {
+    string id = 1;
+}
+
+message ReadTaskResponse {
+    Task task = 1;
+}
+
+message UpdateTaskRequest {
+    Task task = 1;
+}
+
+message UpdateTaskResponse {
+    Task task = 1;
+}
+
+message DeleteTaskRequest {
+    string id = 1;
+}
+
+message DeleteTaskResponse {
+    string id = 1;
+}
+
+message ListTaskRequest {
+}
+
+message ListTaskResponse {
+    Task task = 1;
+}
+
+service TaskService {
+    rpc CreateTask (CreateTaskRequest) returns (CreateTaskResponse);
+    rpc ReadTask (ReadTaskRequest) returns (ReadTaskResponse);
+    rpc UpdateTask (UpdateTaskRequest) returns (UpdateTaskResponse);
+    rpc DeleteTask (DeleteTaskRequest) returns (DeleteTaskResponse);
+    rpc ListTask (ListTaskRequest) returns (ListTaskResponse);
+}
