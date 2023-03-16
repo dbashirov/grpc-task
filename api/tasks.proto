@@ -7,7 +7,7 @@ option go_package = "./api";
 message Task {
     string id = 1;
     string name = 2;
-    string description = 3;
+    string desc = 3;
     bool done = 4;
 }
 
@@ -16,7 +16,7 @@ message CreateTaskRequest {
 }
 
 message CreateTaskResponse {
-    string id = 1;
+    Task task = 1;
 }
 
 message ReadTaskRequest {
