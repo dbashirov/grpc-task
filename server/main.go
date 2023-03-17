@@ -9,8 +9,9 @@ import (
 	"os/signal"
 	"time"
 
-	pb "github.com/dbashirov/grpc-tasks/api"
+	"github.com/dbashirov/grpc-tasks/api"
 	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -32,11 +33,20 @@ type task struct {
 	done bool               `bson:"done"`
 }
 
-type server struct {
-	pb.TaskServiceServer
+func getTaskGRPC(data *task) *api.Task {
+	return &api.Task{
+		Id:   data.id.Hex(),
+		Name: data.name,
+		Desc: data.desc,
+		Done: data.done,
+	}
 }
 
-func (s *server) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*pb.CreateTaskResponse, error) {
+type server struct {
+	api.TaskServiceServer
+}
+
+func (*server) CreateTask(ctx context.Context, req *api.CreateTaskRequest) (*api.CreateTaskResponse, error) {
 
 	log.Println("Start create task")
 
@@ -58,19 +68,120 @@ func (s *server) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*pb
 	if !ok {
 		return nil, status.Errorf(
 			codes.Internal,
-			fmt.Sprint("Cannot convert to OID"),
+			"Cannot convert to OID",
 		)
 	}
 
 	log.Println("End create task")
 
-	return &pb.CreateTaskResponse{
-		Task: &pb.Task{
+	return &api.CreateTaskResponse{
+		// Task: getTaskData(&data),
+		Task: &api.Task{
 			Id:   oid.Hex(),
 			Name: t.GetName(),
 			Desc: t.GetDesc(),
 			Done: t.GetDone(),
 		},
+	}, nil
+}
+
+func (*server) ReadTask(ctx context.Context, req *api.ReadTaskRequest) (*api.ReadTaskResponse, error) {
+
+	log.Println("Read task")
+
+	oid, err := primitive.ObjectIDFromHex(req.GetId())
+	if err != nil {
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			"Cannot parse ID",
+		)
+	}
+
+	data := &task{}
+	filter := bson.M{"_id": oid}
+	res := collection.FindOne(ctx, filter)
+	if err := res.Decode(data); err != nil {
+		return nil, status.Errorf(
+			codes.NotFound,
+			fmt.Sprintf("Cannot find task with ID: %v", err),
+		)
+	}
+
+	return &api.ReadTaskResponse{
+		Task: getTaskGRPC(data),
+	}, nil
+}
+
+func (*server) UpdateTask(ctx context.Context, req *api.UpdateTaskRequest) (*api.UpdateTaskResponse, error) {
+
+	log.Println("Update task")
+
+	t := req.GetTask()
+	oid, err := primitive.ObjectIDFromHex(t.GetId())
+	if err != nil {
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			"Cannot parse ID",
+		)
+	}
+
+	data := &task{}
+	filter := bson.M{"_id": oid}
+	res := collection.FindOne(ctx, filter)
+	if err := res.Decode(data); err != nil {
+		return nil, status.Errorf(
+			codes.NotFound,
+			fmt.Sprintf("Cannot find task with ID: %v", err),
+		)
+	}
+
+	data.name = t.GetName()
+	data.desc = t.GetDesc()
+	data.done = t.GetDone()
+
+	_, err = collection.ReplaceOne(ctx, filter, data)
+	if err != nil {
+		return nil, status.Errorf(
+			codes.Internal,
+			fmt.Sprintf("Cannot update object in MongoDB: %v", err),
+		)
+	}
+
+	return &api.UpdateTaskResponse{
+		Task: getTaskGRPC(data),
+	}, nil
+}
+
+func (*server) DeleteTask(ctx context.Context, req *api.DeleteTaskRequest) (*api.DeleteTaskResponse, error) {
+
+	log.Println("Delete task")
+
+	oid, err := primitive.ObjectIDFromHex(req.GetId())
+	if err != nil {
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			"Cannot parse ID",
+		)
+	}
+
+	filter := bson.M{"_id": oid}
+	res, err := collection.DeleteOne(ctx, filter)
+	if err != nil {
+		return nil, status.Errorf(
+			codes.Internal,
+			fmt.Sprintf("Cannot delete object in MongoDB: %v", err),
+		)
+	}
+
+	if res.DeletedCount == 0 {
+		return nil, status.Errorf(
+			codes.NotFound,
+			"Cannot fint task in MongoDB",
+		)
+	}
+
+	return &api.DeleteTaskResponse{
+		Id: req.GetId(),
 	}, nil
 }
 
@@ -102,7 +213,7 @@ func main() {
 
 	log.Println("Task service started")
 	s := grpc.NewServer()
-	pb.RegisterTaskServiceServer(s, &server{})
+	api.RegisterTaskServiceServer(s, &server{})
 
 	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
