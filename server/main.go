@@ -17,7 +17,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/reflection"
+
+	// "google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 )
 
@@ -189,7 +190,7 @@ func main() {
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	err := godotenv.Load("env_test.env")
+	err := godotenv.Load(".env")
 	if err != nil {
 		log.Fatal("Error loading .env files")
 	}
@@ -209,6 +210,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// log.Println(mongoURL)
+	// log.Println(options.Client().ApplyURI(mongoURL))
+
 	collection = (*mongo.Collection)(client.Database("taskdb").Collection("task"))
 
 	log.Println("Task service started")
@@ -241,5 +245,5 @@ func main() {
 	s.Stop()
 	log.Println("End of Program")
 
-	reflection.Register(s)
+	// reflection.Register(s)
 }
