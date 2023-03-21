@@ -155,7 +155,7 @@ func (*server) UpdateTask(ctx context.Context, req *api.UpdateTaskRequest) (*api
 
 func (*server) DeleteTask(ctx context.Context, req *api.DeleteTaskRequest) (*api.DeleteTaskResponse, error) {
 
-	log.Println("Delete task")
+	log.Println("INFO: Delete task")
 
 	oid, err := primitive.ObjectIDFromHex(req.GetId())
 	if err != nil {
@@ -186,6 +186,10 @@ func (*server) DeleteTask(ctx context.Context, req *api.DeleteTaskRequest) (*api
 	}, nil
 }
 
+func (*server) ListTask(ctx context.Context, req *api.ListTaskRequest) (*api.ListTaskResponse, error) {
+
+}
+
 func main() {
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -202,7 +206,7 @@ func main() {
 
 	mongoURL := os.Getenv("MONGODB_URL")
 
-	log.Println("Connect to MongoDB")
+	log.Println("INFO: Connect to MongoDB")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -215,7 +219,7 @@ func main() {
 
 	collection = (*mongo.Collection)(client.Database("taskdb").Collection("task"))
 
-	log.Println("Task service started")
+	log.Println("INFO: Task service started")
 	s := grpc.NewServer()
 	api.RegisterTaskServiceServer(s, &server{})
 
@@ -225,7 +229,7 @@ func main() {
 	}
 
 	go func() {
-		log.Println("Starting server...")
+		log.Println("INFO: Starting server...")
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("Failed to serv: %v\n", err)
 		}
@@ -236,14 +240,14 @@ func main() {
 
 	<-ch
 
-	log.Println("Closing MongoDB connection")
+	log.Println("INFO: Closing MongoDB connection")
 	if err := client.Disconnect(context.Background()); err != nil {
 		log.Fatalf("Error on disconnection with MongoDB: %v\n", err)
 	}
 
-	log.Println("Stoping server")
+	log.Println("INFO: Stoping server")
 	s.Stop()
-	log.Println("End of Program")
+	log.Println("INFO: End of Program")
 
 	// reflection.Register(s)
 }
