@@ -28,18 +28,22 @@ var (
 )
 
 type task struct {
-	id   primitive.ObjectID `bson:"_id,omitempty"`
-	name string             `bson:"name"`
-	desc string             `bsoon:"desc"`
-	done bool               `bson:"done"`
+	ID   primitive.ObjectID `bson:"_id,omitempty"`
+	Name string             `bson:"name"`
+	Desc string             `bsoon:"desc"`
+	Done bool               `bson:"done"`
+}
+
+func newTask() *task {
+	return &task{}
 }
 
 func getTaskGRPC(data *task) *api.Task {
 	return &api.Task{
-		Id:   data.id.Hex(),
-		Name: data.name,
-		Desc: data.desc,
-		Done: data.done,
+		Id:   data.ID.Hex(),
+		Name: data.Name,
+		Desc: data.Desc,
+		Done: data.Done,
 	}
 }
 
@@ -49,27 +53,28 @@ type server struct {
 
 func (*server) CreateTask(ctx context.Context, req *api.CreateTaskRequest) (*api.CreateTaskResponse, error) {
 
-	log.Println("Start create task")
+	log.Println("[INFO] start create task")
 
 	t := req.GetTask()
 	data := task{
-		name: t.GetName(),
-		desc: t.GetDesc(),
-		done: t.GetDone(),
+		Name: t.GetName(),
+		Desc: t.GetDesc(),
+		Done: t.GetDone(),
 	}
 
 	res, err := collection.InsertOne(ctx, data)
 	if err != nil {
 		return nil, status.Errorf(
 			codes.Internal,
-			fmt.Sprintf("Internal error: %v", err),
+			fmt.Sprintf("[ERROR] internal error: %v", err),
 		)
 	}
+
 	oid, ok := res.InsertedID.(primitive.ObjectID)
 	if !ok {
 		return nil, status.Errorf(
 			codes.Internal,
-			"Cannot convert to OID",
+			"[ERROR] Cannot convert to OID",
 		)
 	}
 
@@ -88,23 +93,23 @@ func (*server) CreateTask(ctx context.Context, req *api.CreateTaskRequest) (*api
 
 func (*server) ReadTask(ctx context.Context, req *api.ReadTaskRequest) (*api.ReadTaskResponse, error) {
 
-	log.Println("Read task")
+	log.Println("[INFO] read task")
 
 	oid, err := primitive.ObjectIDFromHex(req.GetId())
 	if err != nil {
 		return nil, status.Errorf(
 			codes.InvalidArgument,
-			"Cannot parse ID",
+			"[ERROR] cannot parse ID",
 		)
 	}
 
-	data := &task{}
+	data := newTask()
 	filter := bson.M{"_id": oid}
 	res := collection.FindOne(ctx, filter)
 	if err := res.Decode(data); err != nil {
 		return nil, status.Errorf(
 			codes.NotFound,
-			fmt.Sprintf("Cannot find task with ID: %v", err),
+			fmt.Sprintf("[ERROR] cannot find task with ID: %v", err),
 		)
 	}
 
@@ -115,36 +120,36 @@ func (*server) ReadTask(ctx context.Context, req *api.ReadTaskRequest) (*api.Rea
 
 func (*server) UpdateTask(ctx context.Context, req *api.UpdateTaskRequest) (*api.UpdateTaskResponse, error) {
 
-	log.Println("Update task")
+	log.Println("[INFO] update task")
 
 	t := req.GetTask()
 	oid, err := primitive.ObjectIDFromHex(t.GetId())
 	if err != nil {
 		return nil, status.Errorf(
 			codes.InvalidArgument,
-			"Cannot parse ID",
+			"[ERROR] cannot parse ID",
 		)
 	}
 
-	data := &task{}
+	data := newTask()
 	filter := bson.M{"_id": oid}
 	res := collection.FindOne(ctx, filter)
 	if err := res.Decode(data); err != nil {
 		return nil, status.Errorf(
 			codes.NotFound,
-			fmt.Sprintf("Cannot find task with ID: %v", err),
+			fmt.Sprintf("[ERROR] cannot find task with ID: %v", err),
 		)
 	}
 
-	data.name = t.GetName()
-	data.desc = t.GetDesc()
-	data.done = t.GetDone()
+	data.Name = t.GetName()
+	data.Desc = t.GetDesc()
+	data.Done = t.GetDone()
 
 	_, err = collection.ReplaceOne(ctx, filter, data)
 	if err != nil {
 		return nil, status.Errorf(
 			codes.Internal,
-			fmt.Sprintf("Cannot update object in MongoDB: %v", err),
+			fmt.Sprintf("[ERROR] cannot update object in MongoDB: %v", err),
 		)
 	}
 
@@ -155,13 +160,13 @@ func (*server) UpdateTask(ctx context.Context, req *api.UpdateTaskRequest) (*api
 
 func (*server) DeleteTask(ctx context.Context, req *api.DeleteTaskRequest) (*api.DeleteTaskResponse, error) {
 
-	log.Println("INFO: Delete task")
+	log.Println("[INFO] delete task")
 
 	oid, err := primitive.ObjectIDFromHex(req.GetId())
 	if err != nil {
 		return nil, status.Errorf(
 			codes.InvalidArgument,
-			"Cannot parse ID",
+			"[ERROR] cannot parse ID",
 		)
 	}
 
@@ -170,14 +175,14 @@ func (*server) DeleteTask(ctx context.Context, req *api.DeleteTaskRequest) (*api
 	if err != nil {
 		return nil, status.Errorf(
 			codes.Internal,
-			fmt.Sprintf("Cannot delete object in MongoDB: %v", err),
+			fmt.Sprintf("[ERROR] cannot delete object in MongoDB: %v", err),
 		)
 	}
 
 	if res.DeletedCount == 0 {
 		return nil, status.Errorf(
 			codes.NotFound,
-			"Cannot fint task in MongoDB",
+			"[ERROR] cannot fint task in MongoDB",
 		)
 	}
 
@@ -186,8 +191,41 @@ func (*server) DeleteTask(ctx context.Context, req *api.DeleteTaskRequest) (*api
 	}, nil
 }
 
-func (*server) ListTask(ctx context.Context, req *api.ListTaskRequest) (*api.ListTaskResponse, error) {
+func (*server) ListTask(_ *api.ListTaskRequest, stream api.TaskService_ListTaskServer) error {
 
+	log.Println("[INFO] stream list tasks")
+
+	cur, err := collection.Find(context.Background(), primitive.D{})
+	if err != nil {
+		return status.Errorf(
+			codes.Internal,
+			fmt.Sprintf("[ERROR] unknown internal error: %v\n", err),
+		)
+	}
+	defer cur.Close(context.Background())
+
+	for cur.Next(context.Background()) {
+		data := newTask()
+		err := cur.Decode(data)
+		if err != nil {
+			return status.Errorf(
+				codes.Internal,
+				fmt.Sprintf("[ERROR] error while decoding data from MongoDB: %v\n", err),
+			)
+		}
+		stream.Send(&api.ListTaskResponse{
+			Task: getTaskGRPC(data),
+		})
+	}
+
+	if err := cur.Err(); err != nil {
+		return status.Errorf(
+			codes.Internal,
+			fmt.Sprintf("[ERROR] unknown internal error: %v", err),
+		)
+	}
+
+	return nil
 }
 
 func main() {
@@ -196,7 +234,7 @@ func main() {
 
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatal("Error loading .env files")
+		log.Fatal("[ERROR] error loading .env files")
 	}
 
 	port := os.Getenv("PORT")
@@ -206,7 +244,7 @@ func main() {
 
 	mongoURL := os.Getenv("MONGODB_URL")
 
-	log.Println("INFO: Connect to MongoDB")
+	log.Println("[INFO] connect to MongoDB")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -214,12 +252,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// log.Println(mongoURL)
-	// log.Println(options.Client().ApplyURI(mongoURL))
 
 	collection = (*mongo.Collection)(client.Database("taskdb").Collection("task"))
 
-	log.Println("INFO: Task service started")
+	log.Println("[INFO] task service started")
 	s := grpc.NewServer()
 	api.RegisterTaskServiceServer(s, &server{})
 
@@ -229,7 +265,7 @@ func main() {
 	}
 
 	go func() {
-		log.Println("INFO: Starting server...")
+		log.Println("[INFO] starting server...")
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("Failed to serv: %v\n", err)
 		}
@@ -240,14 +276,15 @@ func main() {
 
 	<-ch
 
-	log.Println("INFO: Closing MongoDB connection")
+	log.Println("[INFO] closing MongoDB connection")
 	if err := client.Disconnect(context.Background()); err != nil {
 		log.Fatalf("Error on disconnection with MongoDB: %v\n", err)
 	}
 
-	log.Println("INFO: Stoping server")
+	log.Println("[INFO] stoping server")
 	s.Stop()
-	log.Println("INFO: End of Program")
+	log.Println("[INFO] end of Program")
 
+	// TODO
 	// reflection.Register(s)
 }

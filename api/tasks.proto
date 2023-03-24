@@ -55,5 +55,5 @@ service TaskService {
     rpc ReadTask (ReadTaskRequest) returns (ReadTaskResponse);
     rpc UpdateTask (UpdateTaskRequest) returns (UpdateTaskResponse);
     rpc DeleteTask (DeleteTaskRequest) returns (DeleteTaskResponse);
-    rpc ListTask (ListTaskRequest) returns (ListTaskResponse);
+    rpc ListTask (ListTaskRequest) returns (stream ListTaskResponse);
 }

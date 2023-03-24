@@ -34,7 +34,7 @@ type TaskServiceClient interface {
 	ReadTask(ctx context.Context, in *ReadTaskRequest, opts ...grpc.CallOption) (*ReadTaskResponse, error)
 	UpdateTask(ctx context.Context, in *UpdateTaskRequest, opts ...grpc.CallOption) (*UpdateTaskResponse, error)
 	DeleteTask(ctx context.Context, in *DeleteTaskRequest, opts ...grpc.CallOption) (*DeleteTaskResponse, error)
-	ListTask(ctx context.Context, in *ListTaskRequest, opts ...grpc.CallOption) (*ListTaskResponse, error)
+	ListTask(ctx context.Context, in *ListTaskRequest, opts ...grpc.CallOption) (TaskService_ListTaskClient, error)
 }
 
 type taskServiceClient struct {
@@ -81,13 +81,36 @@ func (c *taskServiceClient) DeleteTask(ctx context.Context, in *DeleteTaskReques
 	return out, nil
 }
 
-func (c *taskServiceClient) ListTask(ctx context.Context, in *ListTaskRequest, opts ...grpc.CallOption) (*ListTaskResponse, error) {
-	out := new(ListTaskResponse)
-	err := c.cc.Invoke(ctx, TaskService_ListTask_FullMethodName, in, out, opts...)
+func (c *taskServiceClient) ListTask(ctx context.Context, in *ListTaskRequest, opts ...grpc.CallOption) (TaskService_ListTaskClient, error) {
+	stream, err := c.cc.NewStream(ctx, &TaskService_ServiceDesc.Streams[0], TaskService_ListTask_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &taskServiceListTaskClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type TaskService_ListTaskClient interface {
+	Recv() (*ListTaskResponse, error)
+	grpc.ClientStream
+}
+
+type taskServiceListTaskClient struct {
+	grpc.ClientStream
+}
+
+func (x *taskServiceListTaskClient) Recv() (*ListTaskResponse, error) {
+	m := new(ListTaskResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // TaskServiceServer is the server API for TaskService service.
@@ -98,7 +121,7 @@ type TaskServiceServer interface {
 	ReadTask(context.Context, *ReadTaskRequest) (*ReadTaskResponse, error)
 	UpdateTask(context.Context, *UpdateTaskRequest) (*UpdateTaskResponse, error)
 	DeleteTask(context.Context, *DeleteTaskRequest) (*DeleteTaskResponse, error)
-	ListTask(context.Context, *ListTaskRequest) (*ListTaskResponse, error)
+	ListTask(*ListTaskRequest, TaskService_ListTaskServer) error
 }
 
 // UnimplementedTaskServiceServer should be embedded to have forward compatible implementations.
@@ -117,8 +140,8 @@ func (UnimplementedTaskServiceServer) UpdateTask(context.Context, *UpdateTaskReq
 func (UnimplementedTaskServiceServer) DeleteTask(context.Context, *DeleteTaskRequest) (*DeleteTaskResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteTask not implemented")
 }
-func (UnimplementedTaskServiceServer) ListTask(context.Context, *ListTaskRequest) (*ListTaskResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListTask not implemented")
+func (UnimplementedTaskServiceServer) ListTask(*ListTaskRequest, TaskService_ListTaskServer) error {
+	return status.Errorf(codes.Unimplemented, "method ListTask not implemented")
 }
 
 // UnsafeTaskServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -204,22 +227,25 @@ func _TaskService_DeleteTask_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TaskService_ListTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListTaskRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _TaskService_ListTask_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ListTaskRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(TaskServiceServer).ListTask(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TaskService_ListTask_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TaskServiceServer).ListTask(ctx, req.(*ListTaskRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(TaskServiceServer).ListTask(m, &taskServiceListTaskServer{stream})
+}
+
+type TaskService_ListTaskServer interface {
+	Send(*ListTaskResponse) error
+	grpc.ServerStream
+}
+
+type taskServiceListTaskServer struct {
+	grpc.ServerStream
+}
+
+func (x *taskServiceListTaskServer) Send(m *ListTaskResponse) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 // TaskService_ServiceDesc is the grpc.ServiceDesc for TaskService service.
@@ -245,11 +271,13 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "DeleteTask",
 			Handler:    _TaskService_DeleteTask_Handler,
 		},
+	},
+	Streams: []grpc.StreamDesc{
 		{
-			MethodName: "ListTask",
-			Handler:    _TaskService_ListTask_Handler,
+			StreamName:    "ListTask",
+			Handler:       _TaskService_ListTask_Handler,
+			ServerStreams: true,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
 	Metadata: "api/tasks.proto",
 }
