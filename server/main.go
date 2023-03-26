@@ -78,7 +78,7 @@ func (*server) CreateTask(ctx context.Context, req *api.CreateTaskRequest) (*api
 		)
 	}
 
-	log.Println("End create task")
+	log.Println("[INFO] End create task")
 
 	return &api.CreateTaskResponse{
 		// Task: getTaskData(&data),

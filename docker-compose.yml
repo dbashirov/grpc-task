@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo
+    container_name: taskdb
+    volumes:
+      - task-volume:/data/db
+    ports:
+      - 27017:27017
+    restart: unless-stopped    
+
+volumes:
+  task-volume:
